@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.pt
+*.pth
+*.egg-info/
+.venv/
+.env
+*.log
+stored_weights/
