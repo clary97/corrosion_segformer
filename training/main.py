@@ -35,8 +35,14 @@ def main():
     parser.add_argument('--class_weights', nargs='+', type=float, default=None)
     args = parser.parse_args()
 
+    assert args.num_classes in (2, 4), '--num_classes 는 2 또는 4 만 지원합니다'
     id2label = ID2LABEL_4 if args.num_classes == 4 else ID2LABEL_2
     label2id = {v: k for k, v in id2label.items()}
+
+    if args.class_weights is not None and len(args.class_weights) != args.num_classes:
+        raise ValueError(
+            f'--class_weights 개수({len(args.class_weights)})가 '
+            f'--num_classes({args.num_classes})와 다릅니다')
 
     print(f'Model  : {args.model_name}')
     print(f'Classes: {args.num_classes} → {list(id2label.values())}')
@@ -58,7 +64,8 @@ def main():
     )
 
     # ── 데이터로더 ────────────────────────────────────────────────────────
-    dataloaders = get_dataloaders(args.data_dir, processor, args.batch_size)
+    dataloaders = get_dataloaders(args.data_dir, processor, args.batch_size,
+                                  num_classes=args.num_classes)
 
     # ── 옵티마이저 ────────────────────────────────────────────────────────
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,

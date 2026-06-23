@@ -39,14 +39,16 @@ def get_augmentation():
 
 
 class CorrosionDataset(Dataset):
-    def __init__(self, root_dir, image_processor, augment=False):
+    def __init__(self, root_dir, image_processor, augment=False, num_classes=4):
         """
         root_dir: Train/ 또는 Test/ 경로 (Images/, Masks/ 하위 폴더 포함)
         image_processor: SegformerImageProcessor 인스턴스
+        num_classes: 4 → Good/Fair/Poor/Severe, 2 → Good/Corrosion(Fair·Poor·Severe 통합)
         """
         self.image_processor = image_processor
         self.augment = augment
         self.aug = get_augmentation() if augment else None
+        self.num_classes = num_classes
 
         img_dir  = os.path.join(root_dir, 'Images')
         msk_dir  = os.path.join(root_dir, 'Masks')
@@ -74,7 +76,11 @@ class CorrosionDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # → RGB
         mask  = cv2.imread(msk_path)               # BGR
 
-        label = mask_to_index(mask)                # (H, W) int64
+        label = mask_to_index(mask)                # (H, W) int64, 0~3
+
+        # 이진 모드: Fair(1)/Poor(2)/Severe(3) → Corrosion(1), Good(0)은 그대로
+        if self.num_classes == 2:
+            label = (label > 0).astype(np.int64)
 
         if self.augment and self.aug:
             result = self.aug(image=image, mask=label.astype(np.int32))
@@ -92,11 +98,13 @@ class CorrosionDataset(Dataset):
         return {'pixel_values': pixel_values, 'labels': labels}
 
 
-def get_dataloaders(data_dir, image_processor, batch_size=4):
+def get_dataloaders(data_dir, image_processor, batch_size=4, num_classes=4):
     train_ds = CorrosionDataset(
-        os.path.join(data_dir, 'Train'), image_processor, augment=True)
+        os.path.join(data_dir, 'Train'), image_processor,
+        augment=True, num_classes=num_classes)
     test_ds  = CorrosionDataset(
-        os.path.join(data_dir, 'Test'),  image_processor, augment=False)
+        os.path.join(data_dir, 'Test'),  image_processor,
+        augment=False, num_classes=num_classes)
 
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,

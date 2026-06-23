@@ -88,7 +88,7 @@ def train_model(model, dataloaders, optimizer, bpath,
         if summary['Test_f1'] > best_f1:
             best_f1  = summary['Test_f1']
             best_wts = copy.deepcopy(model.state_dict())
-            torch.save(model, os.path.join(bpath, f'weights_{epoch}.pt'))
+            torch.save(best_wts, os.path.join(bpath, f'weights_{epoch}.pt'))
             print(f'  ★ Best model saved (Test F1: {best_f1:.4f})')
 
     elapsed = time.time() - since
@@ -96,5 +96,5 @@ def train_model(model, dataloaders, optimizer, bpath,
     print(f'Best Test F1: {best_f1:.4f}')
 
     model.load_state_dict(best_wts)
-    torch.save(model, os.path.join(bpath, 'weights_best.pt'))
+    torch.save(best_wts, os.path.join(bpath, 'weights_best.pt'))
     return model
