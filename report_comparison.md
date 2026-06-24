@@ -129,3 +129,80 @@ FPR_c = FP / (FP + TN) = FP / (전체 픽셀 − support).
   4-class 모델이 함께 필요하다.
 - 두 실험의 best 체크포인트 선택 기준이 다르다(1절 참고). 결론에 영향을 주는 수준은 아니다.
 - 평가 재현: 각 `--exp_dir` 아래 `eval_per_class.csv` 및 `training/evaluate.py` 참고.
+
+---
+
+## 6. 범용성 강화 실험 (외부 데이터 추가)
+
+범용 이진(Good/Corrosion) 모델을 위해 외부 공개 데이터셋
+[Roboflow university-of-tebessa/corrosion-levell](https://universe.roboflow.com/university-of-tebessa/corrosion-levell)
+(484장, 이진 semantic 마스크)을 학습에 추가하였다. 데이터 누수 방지를 위해 Roboflow의
+train(440)만 학습에 합치고, test(44)는 별도 외부 평가셋으로 분리하였다.
+
+- 학습셋: CCSD+CIR train(898) + Roboflow train(440) = **1338장**
+- 평가셋: ① in-domain = CCSD+CIR test(56, 회귀 확인용) ② Roboflow test(44, 새 도메인)
+- 모든 이미지는 512×512로 정렬(이미지 INTER_AREA, 마스크 INTER_NEAREST).
+
+### SegFormer-B2 이진: 추가 전 vs 후
+
+**in-domain (CCSD+CIR test 56)**
+
+| 지표 | 추가 전 | 추가 후 | 변화 |
+|---|---|---|---|
+| Weighted F1 | 0.9424 | **0.9673** | +2.49%p |
+| Corrosion F1 | 0.8807 | **0.9332** | +5.25%p |
+| Corrosion IoU | 0.7868 | **0.8748** | +8.80%p |
+| Corrosion Recall | 0.9064 | **0.9832** | +7.68%p |
+
+**Roboflow (test 44)**
+
+| 지표 | 추가 전 | 추가 후 | 변화 |
+|---|---|---|---|
+| Weighted F1 | 0.9354 | **0.9703** | +3.49%p |
+| Corrosion F1 | 0.8483 | **0.9310** | +8.27%p |
+| Corrosion IoU | 0.7366 | **0.8708** | +13.42%p |
+| Corrosion Recall | 0.8841 | **0.9872** | +10.31%p |
+
+**결론**: in-domain 성능이 **떨어지지 않고 오히려 향상**(회귀 없음)되었으며, 새 도메인은 더 크게
+향상되었다. 두 도메인 모두 Corrosion Recall ≈ 0.98로, 부식 픽셀 검출 누락이 거의 없는
+강건한 범용 이진 모델을 얻었다. (학습 데이터 898→1338 증가가 전반적 성능을 함께 끌어올림.)
+
+### DeepLabV3+ 이진: 추가 전 vs 후
+
+**in-domain (CCSD+CIR test 56)**
+
+| 지표 | 추가 전 | 추가 후 | 변화 |
+|---|---|---|---|
+| Weighted F1 | 0.9286 | **0.9699** | +4.13%p |
+| Corrosion F1 | 0.8503 | **0.9380** | +8.77%p |
+| Corrosion IoU | 0.7396 | **0.8832** | +14.36%p |
+| Corrosion Recall | 0.8607 | **0.9767** | +11.60%p |
+
+**Roboflow (test 44)**
+
+| 지표 | 추가 전 | 추가 후 | 변화 |
+|---|---|---|---|
+| Weighted F1 | 0.9213 | **0.9781** | +5.68%p |
+| Corrosion F1 | 0.8108 | **0.9486** | +13.78%p |
+| Corrosion IoU | 0.6818 | **0.9021** | +22.03%p |
+| Corrosion Recall | 0.8142 | **0.9885** | +17.43%p |
+
+DeepLabV3+ 역시 in-domain 회귀 없이 두 도메인 모두 크게 향상되었다.
+
+### 통합 모델 최종 비교 (추가 후, Weighted F1 / Corrosion IoU)
+
+| 모델 | in-domain (56) | Roboflow (44) |
+|---|---|---|
+| SegFormer-B2 | 0.9673 / 0.8748 | 0.9703 / 0.8708 |
+| DeepLabV3+ | **0.9699 / 0.8832** | **0.9781 / 0.9021** |
+
+**종합 결론**: 외부 데이터(Roboflow train 440) 추가는 두 모델 모두에서 **in-domain 회귀 없이
+양 도메인 성능을 크게 끌어올렸다**(범용성 강화 성공). 추가 후에는 DeepLabV3+가 근소하게 앞서나,
+CCSD+CIR만 사용한 기존 비교(2~4절)에서는 SegFormer가 우세했던 점과 함께 보면, 데이터 규모
+증가의 효과가 컸음을 시사한다. 두 모델 모두 Corrosion Recall ≈ 0.98로 부식 누락이 거의 없다.
+
+> 주의: SegFormer는 best 기준이 Test F1, DeepLabV3+는 spectrum_score로 서로 다르며,
+> Roboflow 평가는 단일 외부 데이터셋(44장) 기준이므로 일반화의 절대 보장은 아니다.
+
+데이터셋 구성 스크립트: `preprocessing/build_combined_dataset.py`,
+평가: `training/evaluate.py`(SegFormer), `eval_deeplab_generic.py`(DeepLabV3+).

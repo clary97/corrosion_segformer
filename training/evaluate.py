@@ -19,8 +19,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from torch.utils.data import DataLoader
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
-from datahandler import get_dataloaders
+from datahandler import CorrosionDataset
 
 ID2LABEL_4 = {0: 'Good', 1: 'Fair', 2: 'Poor', 3: 'Severe'}
 ID2LABEL_2 = {0: 'Good', 1: 'Corrosion'}
@@ -118,12 +119,15 @@ def main():
     print(f'Weights : {args.weights}')
     print(f'Classes : {args.num_classes} → {names}\n')
 
-    # ── 데이터로더 (Test, 증강 없음) ─────────────────────────────────────
-    loaders = get_dataloaders(args.data_dir, SegformerImageProcessor(
-        do_resize=False, do_normalize=True), args.batch_size,
-        num_classes=args.num_classes)
+    # ── Test 데이터로더만 직접 구성 (Train 폴더 없어도 동작 → 외부 평가셋 지원) ──
+    test_ds = CorrosionDataset(
+        os.path.join(args.data_dir, 'Test'),
+        SegformerImageProcessor(do_resize=False, do_normalize=True),
+        augment=False, num_classes=args.num_classes)
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size,
+                             shuffle=False, num_workers=4, drop_last=False)
 
-    cm = confusion_matrix(model, loaders['Test'], device, args.num_classes)
+    cm = confusion_matrix(model, test_loader, device, args.num_classes)
     m = metrics_from_cm(cm)
 
     total = cm.sum()
