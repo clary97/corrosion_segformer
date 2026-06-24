@@ -56,20 +56,24 @@ def metrics_from_cm(cm):
     fp = pred_sum - tp
     fn = support - tp
 
+    total = cm.sum()
+    tn = total - support - fp           # TN = 전체 - (TP+FN) - FP
+
     eps = 1e-12
     precision = tp / (tp + fp + eps)
-    recall    = tp / (tp + fn + eps)
+    recall    = tp / (tp + fn + eps)    # = TPR
     f1        = 2 * tp / (2 * tp + fp + fn + eps)
     iou       = tp / (tp + fp + fn + eps)
+    fpr       = fp / (fp + tn + eps)     # FP / (전체 - support)
 
     # 등장하지 않는 클래스(support=0)는 NaN 처리 → 평균에서 제외
     absent = support == 0
-    for arr in (precision, recall, f1, iou):
+    for arr in (precision, recall, f1, iou, fpr):
         arr[absent] = np.nan
 
     return {
         'precision': precision, 'recall': recall, 'f1': f1, 'iou': iou,
-        'support': support, 'pred_sum': pred_sum,
+        'fpr': fpr, 'support': support, 'pred_sum': pred_sum,
     }
 
 
@@ -125,26 +129,29 @@ def main():
     total = cm.sum()
     pixel_acc = np.diag(cm).sum() / total
 
-    # ── 클래스별 표 출력 ─────────────────────────────────────────────────
-    print('\n클래스별 성능 (Test)')
-    print('-' * 72)
-    print(f'{"class":<10}{"precision":>11}{"recall":>10}{"f1":>10}{"iou":>10}{"support(px)":>15}')
-    print('-' * 72)
-    for i, nm in enumerate(names):
-        print(f'{nm:<10}{m["precision"][i]:>11.4f}{m["recall"][i]:>10.4f}'
-              f'{m["f1"][i]:>10.4f}{m["iou"][i]:>10.4f}{int(m["support"][i]):>15,d}')
-    print('-' * 72)
-    print(f'{"macro":<10}{np.nanmean(m["precision"]):>11.4f}'
-          f'{np.nanmean(m["recall"]):>10.4f}{np.nanmean(m["f1"]):>10.4f}'
-          f'{np.nanmean(m["iou"]):>10.4f}')
     # weighted (support 가중) — NaN 클래스 제외
     w = m['support'] / m['support'].sum()
     def wavg(a):
         valid = ~np.isnan(a)
         return np.sum(a[valid] * w[valid]) / np.sum(w[valid])
+
+    # ── 클래스별 표 출력 ─────────────────────────────────────────────────
+    print('\n클래스별 성능 (Test)')
+    print('-' * 82)
+    print(f'{"class":<10}{"precision":>11}{"recall":>10}{"f1":>10}{"iou":>10}'
+          f'{"fpr":>10}{"support(px)":>15}')
+    print('-' * 82)
+    for i, nm in enumerate(names):
+        print(f'{nm:<10}{m["precision"][i]:>11.4f}{m["recall"][i]:>10.4f}'
+              f'{m["f1"][i]:>10.4f}{m["iou"][i]:>10.4f}{m["fpr"][i]:>10.4f}'
+              f'{int(m["support"][i]):>15,d}')
+    print('-' * 82)
+    print(f'{"macro":<10}{np.nanmean(m["precision"]):>11.4f}'
+          f'{np.nanmean(m["recall"]):>10.4f}{np.nanmean(m["f1"]):>10.4f}'
+          f'{np.nanmean(m["iou"]):>10.4f}{np.nanmean(m["fpr"]):>10.4f}')
     print(f'{"weighted":<10}{wavg(m["precision"]):>11.4f}{wavg(m["recall"]):>10.4f}'
-          f'{wavg(m["f1"]):>10.4f}{wavg(m["iou"]):>10.4f}')
-    print('-' * 72)
+          f'{wavg(m["f1"]):>10.4f}{wavg(m["iou"]):>10.4f}{wavg(m["fpr"]):>10.4f}')
+    print('-' * 82)
     print(f'pixel accuracy : {pixel_acc:.4f}')
     print(f'mean IoU (macro): {np.nanmean(m["iou"]):.4f}')
 
@@ -160,13 +167,15 @@ def main():
         os.path.dirname(os.path.abspath(args.weights)), 'eval_per_class.csv')
     with open(out_csv, 'w', newline='') as f:
         wr = csv.writer(f)
-        wr.writerow(['class', 'precision', 'recall', 'f1', 'iou', 'support_px', 'pred_px'])
+        wr.writerow(['class', 'precision', 'recall', 'f1', 'iou', 'fpr', 'support_px', 'pred_px'])
         for i, nm in enumerate(names):
             wr.writerow([nm, m['precision'][i], m['recall'][i], m['f1'][i],
-                         m['iou'][i], int(m['support'][i]), int(m['pred_sum'][i])])
+                         m['iou'][i], m['fpr'][i], int(m['support'][i]), int(m['pred_sum'][i])])
         wr.writerow(['macro', np.nanmean(m['precision']), np.nanmean(m['recall']),
-                     np.nanmean(m['f1']), np.nanmean(m['iou']), '', ''])
-        wr.writerow(['pixel_accuracy', '', '', '', pixel_acc, int(total), ''])
+                     np.nanmean(m['f1']), np.nanmean(m['iou']), np.nanmean(m['fpr']), '', ''])
+        wr.writerow(['weighted', wavg(m['precision']), wavg(m['recall']),
+                     wavg(m['f1']), wavg(m['iou']), wavg(m['fpr']), '', ''])
+        wr.writerow(['pixel_accuracy', '', '', '', pixel_acc, '', int(total), ''])
     print(f'\n저장: {out_csv}')
 
 
