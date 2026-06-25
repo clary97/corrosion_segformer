@@ -31,6 +31,11 @@
 평가 지표: Precision, Recall, F1, IoU, FPR(거짓양성률, 낮을수록 좋음).
 FPR_c = FP / (FP + TN) = FP / (전체 픽셀 − support).
 
+> **보고서 범위 안내**: 2~4절은 **원본 데이터(CCSD+CIR)** 기준의
+> 아키텍처 비교(SegFormer-**B2** vs DeepLabV3+)이다. SegFormer-**B3**는 베이스라인 백본 선택
+> 맥락에서 도입되어 **통합셋(Roboflow 추가)으로만 학습**하였으므로, 6~7절에서 다룬다
+> (원본 데이터에 대한 B3 결과는 없음).
+
 ---
 
 ## 2. 4-class 결과
